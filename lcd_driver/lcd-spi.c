@@ -408,3 +408,19 @@ static int print_hex(int v)
 	}
 	return len; /* number of characters printed */
 }
+
+/*
+ * void lcd_draw_fullscreen_image(const uint16_t *image_data)
+ *
+ * Draws a raw image exactly covering the 240x320 display.
+ */
+void
+lcd_draw_fullscreen_image(const uint16_t *image_data)
+{
+        int x, y;
+        for (y = 0; y < LCD_HEIGHT; y++) {
+                for (x = 0; x < LCD_WIDTH; x++) {
+                        *(cur_frame + x + y * LCD_WIDTH) = image_data[x + y * LCD_WIDTH];
+                }
+        }
+}

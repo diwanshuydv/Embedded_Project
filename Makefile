@@ -8,7 +8,7 @@ PROJECT = my_lcd_firmware
 OPENCM3_DIR = libopencm3
 
 # All the source files from the libopencm3 example
-SOURCES = main.c clock/clock.c console/console.c font/font-7x12.c gfx/gfx.c lcd_driver/lcd-spi.c sdram/sdram.c
+SOURCES = main.c clock/clock.c console/console.c font/font-7x12.c gfx/gfx.c lcd_driver/lcd-spi.c sdram/sdram.c usart/usart.c
 OBJS = $(SOURCES:.c=.o)
 
 PREFIX = arm-none-eabi-
@@ -16,7 +16,7 @@ CC = $(PREFIX)gcc
 OBJCOPY = $(PREFIX)objcopy
 SIZE = $(PREFIX)size
 
-INCLUDES = -I$(OPENCM3_DIR)/include -Ilcd_driver -Iclock -Iconsole -Igfx -Isdram -Ifont -I.
+INCLUDES = -I$(OPENCM3_DIR)/include -Ilcd_driver -Iclock -Iconsole -Igfx -Isdram -Ifont -Iusart -I.
 
 CFLAGS = -Os -g3 -Wall -Wextra $(INCLUDES) \
          -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -DSTM32F4 \
@@ -59,7 +59,7 @@ size: $(PROJECT).elf
 	$(SIZE) $<
 
 clean:
-	rm -f *.elf *.bin *.o lcd_driver/*.o clock/*.o console/*.o gfx/*.o sdram/*.o font/*.o
+	rm -f *.elf *.bin *.o lcd_driver/*.o clock/*.o console/*.o gfx/*.o sdram/*.o font/*.o usb_cdc/*.o
 
 clobber: clean
 	rm -rf $(OPENCM3_DIR)
