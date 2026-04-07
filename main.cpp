@@ -112,9 +112,22 @@ int main(void) {
 
         if (expected_size != 9216) continue; // Safety check
 
-        // 4. Read Pixels
-        for (uint16_t i = 0; i < expected_size; i++) {
-            image_buffer[i] = usart_read_char();
+        // 4. Read Pixels using DMA
+        usart_dma_receive(image_buffer, expected_size);
+        while(!dma_rx_complete) {
+            if (dma_rx_error) {
+                break;
+            }
+            __asm__("nop"); // small sleep or just nop
+        }
+        
+        if (dma_rx_error) {
+            gfx_setCursor(10, 30);
+            gfx_setTextColor(0xFFFF, 0xF800);
+            gfx_puts((char*)"DMA ERROR         ");
+            lcd_show_frame();
+            for(int j=0; j<2000000; j++) __asm__("nop"); // delay to show error
+            continue;
         }
 
         // 5. Process (LED ON)

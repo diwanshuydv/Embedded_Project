@@ -38,13 +38,9 @@ while True:
     print(f"Sending Frame...", end="", flush=True)
     ser.write(header)
     
-    # 📤 SEND PIXELS IN CHUNKS (This is the fix)
-    chunk_size = 512
-    for i in range(0, len(img_data), chunk_size):
-        ser.write(img_data[i:i+chunk_size])
-        ser.flush()
-        time.sleep(0.005) # 5ms delay allows STM32 hardware buffer to clear
-        
+    # 📤 SEND ALL PIXELS IN ONE SHOT (DMA enabled on STM32)
+    ser.write(img_data)
+    ser.flush()
     print(" Sent. Waiting for AI...")
 
     # 📥 WAIT FOR AI RESULT (Max 5 seconds)
