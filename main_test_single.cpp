@@ -6,6 +6,7 @@ extern "C" {
     #include "usart/usart.h" 
     #include "sdram/sdram.h" 
     #include "gfx.h"
+    
     extern void clock_setup(void); 
     extern void lcd_spi_init(void);
     extern void lcd_draw_pixel(int x, int y, uint16_t color);
@@ -19,15 +20,14 @@ extern "C" int _write(int file, char *ptr, int len) {
     return len;
 }
 
-
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "model_data.h" 
+#include "test_image.h" // Contains the dummy_image[9216] test array
 
 #define SDRAM_BASE 0xD0000000
 #define IMG_MAX 9216 
 uint8_t* image_buffer = (uint8_t*)(SDRAM_BASE + 0x80000); // offset by 512KB for LCD buffer protection
-
 
 // 🔥 SAFETY FIX: Move Arena to 1MB offset to avoid LCD Buffer collision
 constexpr int kTensorArenaSize = 150 * 1024;
@@ -39,8 +39,6 @@ uint16_t gray_to_rgb565(uint8_t gray) {
     uint8_t b = (gray >> 3) & 0x1F;
     return (r << 11) | (g << 5) | b;
 }
-
-// ... [Includes and externs remain the same] ...
 
 int main(void) {
     clock_setup(); 
@@ -61,8 +59,11 @@ int main(void) {
     const tflite::Model* model = tflite::GetModel(person_detect_tflite); 
     
     tflite::MicroMutableOpResolver<6> resolver;
-    resolver.AddAveragePool2D(); resolver.AddConv2D();
-    resolver.AddDepthwiseConv2D(); resolver.AddReshape(); resolver.AddSoftmax();
+    resolver.AddAveragePool2D(); 
+    resolver.AddConv2D();
+    resolver.AddDepthwiseConv2D(); 
+    resolver.AddReshape(); 
+    resolver.AddSoftmax();
 
     // --- BREADCRUMB 3: ARENA ALLOCATION ---
     // If the board crashes here, your SDRAM base address is wrong
@@ -86,51 +87,23 @@ int main(void) {
     gfx_setCursor(10, 10);
     gfx_setTextColor(0xFFFF, 0x07E0);
     gfx_puts((char*)"AI INIT SUCCESS");
+    lcd_show_frame();
     
     TfLiteTensor* input = interpreter.input(0);
     TfLiteTensor* output = interpreter.output(0); 
-    int x_offset = (GFX_WIDTH - 96) / 2;
-    int y_offset = (GFX_HEIGHT - 96) / 2;
     
     while (1) {
-        // Run a dummy inference or just clear string
         gfx_setCursor(10, 30);
         gfx_setTextColor(0xFFFF, 0x0000);
-        gfx_puts((char*)"WAITING FOR SERIAL INPUT ");
+        gfx_puts((char*)"PROCESSING HARDCODED...     ");
         lcd_show_frame();
 
-        // 1. Hunt for 0xAA
-        if ((uint8_t)usart_read_char() != 0xAA) continue;
-        
-        // 2. Found 0xAA! Now look for 0x55
-        if ((uint8_t)usart_read_char() != 0x55) continue;
-
-        // 3. Header confirmed. Read Size (2 bytes)
-        uint8_t size_low = usart_read_char();
-        uint8_t size_high = usart_read_char();
-        uint16_t expected_size = (size_high << 8) | size_low;
-
-        if (expected_size != 9216) continue; // Safety check
-
-        // 4. Read Pixels using DMA
-        usart_dma_receive(image_buffer, expected_size);
-        while(!dma_rx_complete) {
-            if (dma_rx_error) {
-                break;
-            }
-            __asm__("nop"); // small sleep or just nop
+        // 1. Load the hardcoded image directly into the buffer (Bypassing USART completely)
+        for (uint16_t i = 0; i < 9216; i++) {
+            image_buffer[i] = dummy_image[i];
         }
         
-        if (dma_rx_error) {
-            gfx_setCursor(10, 30);
-            gfx_setTextColor(0xFFFF, 0xF800);
-            gfx_puts((char*)"DMA ERROR         ");
-            lcd_show_frame();
-            for(int j=0; j<2000000; j++) __asm__("nop"); // delay to show error
-            continue;
-        }
-
-        // 5. Process (LED ON)
+        // 2. Process (LED ON)
         gpio_set(GPIOG, GPIO13);
 
         gfx_setCursor(10, 30);
@@ -161,9 +134,10 @@ int main(void) {
             }
         }
 
+        // 3. Run AI Inference
         interpreter.Invoke();
 
-        // 6. Display and Response
+        // 4. Display and Response
         int8_t no_person_score = output->data.int8[0];
         int8_t person_score = output->data.int8[1];
         bool is_person = person_score > no_person_score;
@@ -186,11 +160,15 @@ int main(void) {
 
         lcd_show_frame(); 
 
-        // Send Result (Only 3 bytes: 0xBB 0x66 Result)
+        // Send Result over USART
         usart_send_blocking(USART1, 0xBB);
         usart_send_blocking(USART1, 0x66);
         usart_send_blocking(USART1, is_person ? 1 : 0);
 
         gpio_clear(GPIOG, GPIO13);
+
+        // 🛑 HALT: Stop looping so you can read the LCD screen easily.
+        // Once this works, you know the AI is perfect.
+        while(1);
     }
 }
